@@ -1,7 +1,7 @@
+from __future__ import annotations
 # Standard libaries
 import dataclasses
-import typing
-from typing import Optional, List
+from typing import *
 
 # External libaries
 import numpy as np
@@ -20,6 +20,10 @@ from vayesta.core.bath import DMET_Bath
 from vayesta.mpi import mpi
 
 from vayesta.ewf import ewf
+
+if TYPE_CHECKING:
+    from numpy.typing import ArrayLike
+    from vayesta.core.typedefs import ArrayOrArrayTuple
 
 
 # Get MPI rank of fragment
@@ -63,7 +67,7 @@ class Fragment(BaseFragment):
     @dataclasses.dataclass
     class Flags(BaseFragment.Flags):
         # Tailoring and external correction of CCSD
-        external_corrections: Optional[List[typing.Any]] = dataclasses.field(default_factory=list)
+        external_corrections: Optional[List[Any]] = dataclasses.field(default_factory=list)
         # Whether to perform additional checks on external corrections
         test_extcorr: bool = False
 
@@ -85,7 +89,7 @@ class Fragment(BaseFragment):
             """Cluster 2DM"""
             return self.wf.make_rdm2()
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         """
         Parameters
         ----------
@@ -100,12 +104,13 @@ class Fragment(BaseFragment):
         # For self-consistent mode
         self.solver_results = None
 
-    def _reset(self, *args, **kwargs):
+    def _reset(self, *args, **kwargs) -> None:
         super()._reset(*args, **kwargs)
         # Need to unset these so can be regenerated each iteration.
         self.opts.c_cas_occ = self.opts.c_cas_vir = None
 
-    def set_cas(self, iaos=None, c_occ=None, c_vir=None, minao="auto", dmet_threshold=None):
+    def set_cas(self, iaos=None, c_occ: ArrayLike = None, c_vir: ArrayLike = None, minao: str = "auto",
+                dmet_threshold: float | None = None) -> Tuple[np.ndarray, np.ndarray]:
         """Set complete active space for tailored CCSD and active-space CC methods."""
         if dmet_threshold is None:
             dmet_threshold = 2 * self.opts.bath_options["dmet_threshold"]
@@ -131,8 +136,8 @@ class Fragment(BaseFragment):
         return c_cas_occ, c_cas_vir
 
     def add_external_corrections(
-        self, fragments, correction_type="tailor", projectors=1, test_extcorr=False, low_level_coul=True
-    ):
+        self, fragments: List[Fragment], correction_type: str = "tailor", projectors: int = 1,
+            test_extcorr: bool = False, low_level_coul: bool = True) -> None:
         """Add tailoring or external correction from other fragment solutions to CCSD solver.
 
         Parameters
@@ -177,16 +182,16 @@ class Fragment(BaseFragment):
         self.flags.external_corrections.extend([(f.id, correction_type, projectors, low_level_coul) for f in fragments])
         self.flags.test_extcorr = test_extcorr
 
-    def clear_external_corrections(self):
+    def clear_external_corrections(self) -> None:
         """Remove all tailoring or external correction which were added via add_external_corrections."""
         self.flags.external_corrections = []
         self.flags.test_extcorr = False
 
-    def get_init_guess(self, init_guess, solver, cluster):
+    def get_init_guess(self, init_guess, solver, cluster) -> Dict:
         # FIXME
         return {}
 
-    def kernel(self, solver=None, init_guess=None):
+    def kernel(self, solver: str | None = None, init_guess=None) -> Results:
         solver = solver or self.solver
         self.check_solver(solver)
         if self.cluster is None:
@@ -291,7 +296,7 @@ class Fragment(BaseFragment):
             results.e_corr_dm2cumulant = self.make_fragment_dm2cumulant_energy(hamil=self.hamil)
         return results
 
-    def get_solver_options(self, solver):
+    def get_solver_options(self, solver: str) -> Dict[str, Any]:
         # TODO: fix this mess...
         # Use those values from solver_options, which are not None
         # (conv_tol, max_cycle, solve_lambda,...)
@@ -331,7 +336,8 @@ class Fragment(BaseFragment):
 
     # --- Energies
 
-    def get_fragment_energy(self, c1, c2, hamil=None, fock=None, c2ba_order="ba", axis1="fragment"):
+    def get_fragment_energy(self, c1: ArrayLike, c2: ArrayLike, hamil: 'ClusterHamiltonian' | None = None,
+                            fock: ArrayLike | None = None, c2ba_order: str = "ba", axis1: str = "fragment") -> float:
         """Calculate fragment correlation energy contribution from projected C1, C2.
 
         Parameters
@@ -387,7 +393,7 @@ class Fragment(BaseFragment):
 
     # --- Density-matrices
 
-    def _ccsd_amplitudes_for_dm(self, t_as_lambda=False, sym_t2=True):
+    def _ccsd_amplitudes_for_dm(self, t_as_lambda: bool = False, sym_t2: bool = True) -> Tuple[np.ndarray, ...]:
         wf = self.results.wf.as_ccsd()
         t1, t2 = wf.t1, wf.t2
         pwf = self.results.pwf.restore(sym=sym_t2).as_ccsd()
@@ -401,7 +407,8 @@ class Fragment(BaseFragment):
             l1x, l2x = pwf.l1, pwf.l2
         return t1, t2, l1, l2, t1x, t2x, l1x, l2x
 
-    def _get_projected_gamma1_intermediates(self, t_as_lambda=False, sym_t2=True):
+    def _get_projected_gamma1_intermediates(self, t_as_lambda: bool = False,
+                                            sym_t2: bool = True) -> Tuple[np.ndarray, ...]:
         """Intermediates for 1-DM, projected in Lambda-amplitudes and linear T-term."""
         t1, t2, l1, l2, t1x, t2x, l1x, l2x = self._ccsd_amplitudes_for_dm(t_as_lambda=t_as_lambda, sym_t2=sym_t2)
         doo, dov, dvo, dvv = pyscf.cc.ccsd_rdm._gamma1_intermediates(None, t1, t2, l1x, l2x)
@@ -410,7 +417,7 @@ class Fragment(BaseFragment):
         d1 = (doo, dov, dvo, dvv)
         return d1
 
-    def _get_projected_gamma2_intermediates(self, t_as_lambda=False, sym_t2=True):
+    def _get_projected_gamma2_intermediates(self, t_as_lambda: bool = False, sym_t2: bool = True) -> Tuple[np.ndarray]:
         """Intermediates for 2-DM, projected in Lambda-amplitudes and linear T-term."""
         t1, t2, l1, l2, t1x, t2x, l1x, l2x = self._ccsd_amplitudes_for_dm(t_as_lambda=t_as_lambda, sym_t2=sym_t2)
         cc = self.mf  # Only attributes stdout, verbose, and max_memory are needed, just use mean-field object
@@ -422,7 +429,7 @@ class Fragment(BaseFragment):
         d2 = (dovov, *d2rest)
         return d2
 
-    def make_fragment_dm1(self, t_as_lambda=False, sym_t2=True):
+    def make_fragment_dm1(self, t_as_lambda: bool = False, sym_t2: bool = True) -> np.ndarray:
         """Currently CCSD only.
 
         Without mean-field contribution!"""
@@ -430,9 +437,8 @@ class Fragment(BaseFragment):
         dm1 = pyscf.cc.ccsd_rdm._make_rdm1(None, d1, with_frozen=False, with_mf=False)
         return dm1
 
-    def make_fragment_dm2cumulant(
-        self, t_as_lambda=False, sym_t2=True, sym_dm2=True, full_shape=True, approx_cumulant=True
-    ):
+    def make_fragment_dm2cumulant(self, t_as_lambda: bool = False, sym_t2: bool = True, sym_dm2: bool = True,
+                                  full_shape: bool = True, approx_cumulant: bool = True) -> np.ndarray:
         """Currently MP2/CCSD only"""
 
         if self.solver == "MP2":
@@ -480,7 +486,8 @@ class Fragment(BaseFragment):
     #    return e_dm1
 
     @log_method()
-    def make_fragment_dm2cumulant_energy(self, hamil=None, t_as_lambda=False, sym_t2=True, approx_cumulant=True):
+    def make_fragment_dm2cumulant_energy(self, hamil: 'ClusterHamiltonian' | None = None, t_as_lambda: bool = False,
+                                         sym_t2: bool = True, approx_cumulant: bool = True) -> float:
         if hamil is None:
             hamil = self.hamil
 
@@ -514,7 +521,7 @@ class Fragment(BaseFragment):
     # --- Other
     # ---------
 
-    def get_fragment_bsse(self, rmax=None, nimages=5, unit="A"):
+    def get_fragment_bsse(self, rmax: float | None = None, nimages: int = 5, unit: str = "A") -> float:
         self.log.info("Counterpoise Calculation")
         self.log.info("************************")
         if rmax is None:
@@ -547,7 +554,8 @@ class Fragment(BaseFragment):
         self.log.debugv("Counterpoise: E(BSSE)= % 16.8f Ha", e_bsse)
         return e_bsse
 
-    def counterpoise_calculation(self, rmax, dm0=None, nimages=5, unit="A"):
+    def counterpoise_calculation(self, rmax: float, dm0=None, nimages: int = 5,
+                                 unit: str = "A") -> Tuple[int, float, float, np.ndarray]:
         mol = self.make_counterpoise_mol(rmax, nimages=nimages, unit=unit, output="pyscf-cp.txt")
         # Mean-field
         # mf = type(self.mf)(mol)

@@ -1,13 +1,13 @@
+from __future__ import annotations
 # --- Standard
+from typing import *
 import dataclasses
 
 # --- External
 import numpy as np
 from vayesta.core.util import (
-    NotCalculatedError,
     break_into_lines,
     cache,
-    deprecated,
     dot,
     einsum,
     energy_string,
@@ -17,8 +17,6 @@ from vayesta.core.util import (
     timer,
 )
 from vayesta.core.qemb import Embedding
-from vayesta.core.fragmentation import SAO_Fragmentation
-from vayesta.core.fragmentation import IAOPAO_Fragmentation
 from vayesta.mpi import mpi
 from vayesta.ewf.fragment import Fragment
 from vayesta.ewf.amplitudes import get_global_t1_rhf
@@ -29,6 +27,10 @@ from vayesta.ewf.rdm import make_rdm2_ccsd_global_wf
 from vayesta.ewf.rdm import make_rdm1_ccsd_proj_lambda
 from vayesta.ewf.rdm import make_rdm2_ccsd_proj_lambda
 from vayesta.ewf.icmp2 import get_intercluster_mp2_energy_rhf
+
+if TYPE_CHECKING:
+    from logging import Logger
+    from vayesta.core.typedefs import ArrayOrArrayTuple
 
 
 @dataclasses.dataclass
@@ -65,7 +67,7 @@ class EWF(Embedding):
     Fragment = Fragment
     Options = Options
 
-    def __init__(self, mf, solver="CCSD", log=None, **kwargs):
+    def __init__(self, mf: Any, solver: str = "CCSD", log: Logger | None = None, **kwargs: Any) -> None:
         t0 = timer()
         super().__init__(mf, solver=solver, log=log, **kwargs)
 
@@ -76,30 +78,30 @@ class EWF(Embedding):
             self.log.info(break_into_lines(str(self.opts), newline="\n    "))
             self.log.info("Time for %s setup: %s", self.__class__.__name__, time_string(timer() - t0))
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         keys = ["mf", "solver"]
         fmt = ("%s(" + len(keys) * "%s: %r, ")[:-2] + ")"
         values = [self.__dict__[k] for k in keys]
         return fmt % (self.__class__.__name__, *[x for y in zip(keys, values) for x in y])
 
-    def _reset(self, **kwargs):
+    def _reset(self, **kwargs: Any) -> None:
         super()._reset(**kwargs)
         # TODO: Redo self-consistencies
         self.iteration = 0
         self._make_rdm1_ccsd_global_wf_cached.cache_clear()
 
     # Default fragmentation
-    def fragmentation(self, *args, **kwargs):
+    def fragmentation(self, *args: Any, **kwargs: Any):
         return self.iao_fragmentation(*args, **kwargs)
 
-    def tailor_all_fragments(self):
+    def tailor_all_fragments(self) -> None:
         for x in self.fragments:
             for y in self.fragments:
                 if x == y:
                     continue
                 x.add_tailor_fragment(y)
 
-    def kernel(self):
+    def kernel(self) -> float | None:
         """Run EWF."""
         t_start = timer()
 
@@ -188,7 +190,7 @@ class EWF(Embedding):
         self.log.info("Total wall time:  %s", time_string(timer() - t_start))
         return self.e_tot
 
-    def _all_converged(self, fragments):
+    def _all_converged(self, fragments: List[Fragment]) -> bool:
         conv = True
         for fx in fragments:
             conv = conv and fx.results.converged
@@ -204,15 +206,15 @@ class EWF(Embedding):
     get_global_t2 = get_global_t2_rhf
 
     # Lambda-amplitudes
-    def get_global_l1(self, *args, t_as_lambda=None, **kwargs):
+    def get_global_l1(self, *args, t_as_lambda: bool | None = None, **kwargs) -> ArrayOrArrayTuple:
         get_lambda = True if not t_as_lambda else False
         return self.get_global_t1(*args, get_lambda=get_lambda, **kwargs)
 
-    def get_global_l2(self, *args, t_as_lambda=None, **kwargs):
+    def get_global_l2(self, *args, t_as_lambda: bool | None = None, **kwargs) -> ArrayOrArrayTuple:
         get_lambda = True if not t_as_lambda else False
         return self.get_global_t2(*args, get_lambda=get_lambda, **kwargs)
 
-    def t1_diagnostic(self, warntol=0.02):
+    def t1_diagnostic(self, warntol: float = 0.02) -> None:
         # Per cluster
         for fx in self.get_fragments(active=True, mpi_rank=mpi.rank):
             wfx = fx.results.wf.as_ccsd()
@@ -238,7 +240,7 @@ class EWF(Embedding):
 
     # Defaults
 
-    def make_rdm1(self, *args, **kwargs):
+    def make_rdm1(self, *args, **kwargs) -> ArrayOrArrayTuple:
         if "cc" in self.solver.lower():
             return self._make_rdm1_ccsd_global_wf(*args, **kwargs)
         if self.solver.lower() == "mp2":
@@ -247,7 +249,7 @@ class EWF(Embedding):
             return self.make_rdm1_demo(*args, **kwargs)
         raise NotImplementedError("make_rdm1 for solver '%s'" % self.solver)
 
-    def make_rdm2(self, *args, **kwargs):
+    def make_rdm2(self, *args, **kwargs) -> ArrayOrArrayTuple:
         if self.solver.lower() == "ccsd":
             return self._make_rdm2_ccsd_proj_lambda(*args, **kwargs)
             # return self._make_rdm2_ccsd(*args, **kwargs)
@@ -257,15 +259,16 @@ class EWF(Embedding):
 
     # DM1
     @log_method()
-    def _make_rdm1_mp2(self, *args, **kwargs):
+    def _make_rdm1_mp2(self, *args, **kwargs) -> ArrayOrArrayTuple:
         return make_rdm1_ccsd(self, *args, mp2=True, **kwargs)
 
     @log_method()
-    def _make_rdm1_ccsd(self, *args, **kwargs):
+    def _make_rdm1_ccsd(self, *args, **kwargs) -> ArrayOrArrayTuple:
         return make_rdm1_ccsd(self, *args, mp2=False, **kwargs)
 
     @log_method()
-    def _make_rdm1_ccsd_global_wf(self, *args, ao_basis=False, with_mf=True, **kwargs):
+    def _make_rdm1_ccsd_global_wf(self, *args, ao_basis: bool = False, with_mf: bool = True,
+                                  **kwargs) -> ArrayOrArrayTuple:
         dm1 = self._make_rdm1_ccsd_global_wf_cached(*args, **kwargs)
         if with_mf:
             dm1[np.diag_indices(self.nocc)] += 2
@@ -274,24 +277,24 @@ class EWF(Embedding):
         return dm1
 
     @cache(copy=True)
-    def _make_rdm1_ccsd_global_wf_cached(self, *args, **kwargs):
+    def _make_rdm1_ccsd_global_wf_cached(self, *args, **kwargs) -> ArrayOrArrayTuple:
         return make_rdm1_ccsd_global_wf(self, *args, **kwargs)
 
-    def _make_rdm1_mp2_global_wf(self, *args, **kwargs):
+    def _make_rdm1_mp2_global_wf(self, *args, **kwargs) -> ArrayOrArrayTuple:
         return self._make_rdm1_ccsd_global_wf(*args, t_as_lambda=True, with_t1=False, **kwargs)
 
     @log_method()
-    def _make_rdm1_ccsd_proj_lambda(self, *args, **kwargs):
+    def _make_rdm1_ccsd_proj_lambda(self, *args, **kwargs) -> ArrayOrArrayTuple:
         return make_rdm1_ccsd_proj_lambda(self, *args, **kwargs)
 
     # DM2
 
     @log_method()
-    def _make_rdm2_ccsd_global_wf(self, *args, **kwargs):
+    def _make_rdm2_ccsd_global_wf(self, *args, **kwargs) -> ArrayOrArrayTuple:
         return make_rdm2_ccsd_global_wf(self, *args, **kwargs)
 
     @log_method()
-    def _make_rdm2_ccsd_proj_lambda(self, *args, **kwargs):
+    def _make_rdm2_ccsd_proj_lambda(self, *args, **kwargs) -> ArrayOrArrayTuple:
         return make_rdm2_ccsd_proj_lambda(self, *args, **kwargs)
 
     # --- Energy
@@ -299,7 +302,7 @@ class EWF(Embedding):
 
     # Correlation
 
-    def get_e_corr(self, functional=None, **kwargs):
+    def get_e_corr(self, functional: str | None = None, **kwargs) -> float:
         functional = functional or self.opts.energy_functional
 
         if functional == "projected":
@@ -314,7 +317,7 @@ class EWF(Embedding):
         raise ValueError("Unknown energy functional: '%s'" % functional)
 
     @mpi.with_allreduce()
-    def get_wf_corr_energy(self):
+    def get_wf_corr_energy(self) -> float:
         e_corr = 0.0
         # Only loop over fragments of own MPI rank
         for x in self.get_fragments(contributes=True, sym_parent=None, mpi_rank=mpi.rank):
@@ -331,14 +334,16 @@ class EWF(Embedding):
             e_corr += x.symmetry_factor * ex
         return e_corr / self.ncells
 
-    def get_dm_corr_energy(self, dm1="global-wf", dm2="projected-lambda", t_as_lambda=None, with_exxdiv=None):
+    def get_dm_corr_energy(self, dm1: str = "global-wf", dm2: str = "projected-lambda", t_as_lambda: bool = None,
+                           with_exxdiv: str | None = None) -> float:
         e1 = self.get_dm_corr_energy_e1(dm1=dm1, t_as_lambda=None, with_exxdiv=None)
         e2 = self.get_dm_corr_energy_e2(dm2=dm2, t_as_lambda=t_as_lambda)
         e_corr = e1 + e2
         self.log.debug("Ecorr(1)= %s  Ecorr(2)= %s  Ecorr= %s", *map(energy_string, (e1, e2, e_corr)))
         return e_corr
 
-    def get_dm_corr_energy_e1(self, dm1="global-wf", t_as_lambda=None, with_exxdiv=None):
+    def get_dm_corr_energy_e1(self, dm1: str = "global-wf", t_as_lambda: bool | None = None,
+                              with_exxdiv: str | None = None) -> float:
         # Correlation energy due to changes in 1-DM and non-cumulant 2-DM:
         if dm1 == "global-wf":
             dm1 = self._make_rdm1_ccsd_global_wf(with_mf=False, t_as_lambda=t_as_lambda, ao_basis=True)
@@ -364,7 +369,7 @@ class EWF(Embedding):
         return e1 / self.ncells
 
     @mpi.with_allreduce()
-    def get_dm_corr_energy_e2(self, dm2="projected-lambda", t_as_lambda=None):
+    def get_dm_corr_energy_e2(self, dm2: str = "projected-lambda", t_as_lambda: bool | None = None) -> float:
         """Correlation energy due to cumulant"""
         if t_as_lambda is None:
             t_as_lambda = self.opts.t_as_lambda
@@ -393,7 +398,7 @@ class EWF(Embedding):
             raise ValueError("Unknown value for dm2: '%s'" % dm2)
         return e2 / self.ncells
 
-    def get_ccsd_corr_energy(self, full_wf=False):
+    def get_ccsd_corr_energy(self, full_wf: bool = False) -> float:
         """Get projected correlation energy from partitioned CCSD WF.
 
         This is the projected (T1, T2) energy expression, instead of the
@@ -420,15 +425,9 @@ class EWF(Embedding):
                 pwf = x.results.pwf.as_ccsd()
                 ro = x.get_overlap("mo-occ|cluster-occ")
                 rv = x.get_overlap("mo-vir|cluster-vir")
-
                 t1x = dot(ro.T, t1, rv)  # N(frag) * N^2
                 c2x = pwf.t2 + einsum("ia,jb->ijab", pwf.t1, t1x)
-
-                noccx = x.cluster.nocc_active
-                nvirx = x.cluster.nvir_active
-
                 eris = x.hamil.get_eris_bare("ovvo")
-
                 px = x.get_overlap("frag|cluster-occ")
                 eris = einsum("xi,iabj->xabj", px, eris)
                 wx = x.symmetry_factor * x.sym_factor
@@ -443,26 +442,26 @@ class EWF(Embedding):
     # Total energy
 
     @property
-    def e_tot(self):
+    def e_tot(self) -> float:
         """Total energy."""
         return self.e_mf + self.e_corr
 
-    def get_wf_energy(self, *args, **kwargs):
+    def get_wf_energy(self, *args, **kwargs) -> float:
         e_corr = self.get_wf_corr_energy(*args, **kwargs)
         return self.e_mf + e_corr
 
-    def get_dm_energy(self, *args, **kwargs):
+    def get_dm_energy(self, *args, **kwargs) -> float:
         e_corr = self.get_dm_corr_energy(*args, **kwargs)
         return self.e_mf + e_corr
 
-    def get_ccsd_energy(self, full_wf=False):
+    def get_ccsd_energy(self, full_wf: bool = False) -> float:
         return self.e_mf + self.get_ccsd_corr_energy(full_wf=full_wf)
 
     # --- Energy corrections
 
     @mpi.with_allreduce()
     @log_method()
-    def get_fbc_energy(self, occupied=True, virtual=True):
+    def get_fbc_energy(self, occupied: bool = True, virtual: bool = True) -> float:
         """Get finite-bath correction (FBC) energy.
 
         This correction consists of two independent contributions, one due to the finite occupied,
@@ -511,10 +510,10 @@ class EWF(Embedding):
         return e_fbc
 
     @log_method()
-    def get_intercluster_mp2_energy(self, *args, **kwargs):
+    def get_intercluster_mp2_energy(self, *args, **kwargs) -> float:
         return get_intercluster_mp2_energy_rhf(self, *args, **kwargs)
 
-    def _get_dm_energy_old(self, global_dm1=True, global_dm2=False):
+    def _get_dm_energy_old(self, global_dm1=True, global_dm2=False) -> float:
         """Calculate total energy from reduced density-matrices.
 
         RHF ONLY!
@@ -532,7 +531,7 @@ class EWF(Embedding):
         """
         return self.e_mf + self._get_dm_corr_energy_old(global_dm1=global_dm1, global_dm2=global_dm2)
 
-    def _get_dm_corr_energy_old(self, global_dm1=True, global_dm2=False):
+    def _get_dm_corr_energy_old(self, global_dm1: bool = True, global_dm2: bool = False) -> float:
         """Calculate correlation energy from reduced density-matrices.
 
         RHF ONLY!
@@ -572,7 +571,7 @@ class EWF(Embedding):
 
     # --- Debugging
 
-    def _debug_get_wf(self, kind):
+    def _debug_get_wf(self, kind: str) -> None:
         if kind == "random":
             return
         if kind == "exact":
