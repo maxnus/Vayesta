@@ -1,14 +1,20 @@
+from __future__ import annotations
+from typing import *
+
+import numpy as np
 from pyscf.mp.mp2 import _mo_without_core
+import pyscf.lib
+
 from vayesta.core.ao2mo import kao2gmo_cderi
 from vayesta.core.ao2mo import postscf_ao2mo
 from vayesta.core.ao2mo import postscf_kao2gmo
-
-import numpy as np
 from vayesta.core.util import *
-import pyscf.lib
+
+if TYPE_CHECKING:
+    from vayesta.core.qemb import Embedding
 
 
-def get_cderi(emb, mo_coeff, compact=False, blksize=None):
+def get_cderi(emb: Embedding, mo_coeff: np.ndarray, compact: bool = False, blksize: int | None = None):
     if compact:
         raise NotImplementedError()
     if emb.kdf is not None:
@@ -17,7 +23,8 @@ def get_cderi(emb, mo_coeff, compact=False, blksize=None):
         return get_cderi_df(emb.mf, mo_coeff, compact=compact, blksize=blksize)
 
 
-def get_cderi_df(mf, mo_coeff, compact=False, blksize=None):
+def get_cderi_df(mf, mo_coeff: np.ndarray, compact: bool = False,
+                 blksize: int | None = None) -> Tuple[np.ndarray, np.ndarray | None]:
     """Get density-fitted three-center integrals in MO basis."""
     if compact:
         raise NotImplementedError()
@@ -62,7 +69,8 @@ def get_cderi_df(mf, mo_coeff, compact=False, blksize=None):
     return cderi, None
 
 
-def get_cderi_exspace(emb, ex_coeff, compact=False, blksize=None):
+def get_cderi_exspace(emb: Embedding, ex_coeff: np.ndarray, compact: bool = False,
+                      blksize: int | None = None) -> Tuple[np.ndarray, np.ndarray | None]:
     if compact:
         raise NotImplementedError()
     if emb.kdf is not None:
@@ -71,7 +79,8 @@ def get_cderi_exspace(emb, ex_coeff, compact=False, blksize=None):
         return get_cderi_df_exspace(emb.mf, ex_coeff, compact=compact, blksize=blksize)
 
 
-def get_cderi_df_exspace(mf, ex_coeff, compact=False, blksize=None):
+def get_cderi_df_exspace(mf, ex_coeff: np.ndarray, compact: bool = False,
+                         blksize: int | None = None) -> Tuple[np.ndarray, np.ndarray | None]:
     """Get density-fitted three-center integrals in MO basis."""
     if compact:
         raise NotImplementedError()
@@ -114,7 +123,7 @@ def get_cderi_df_exspace(mf, ex_coeff, compact=False, blksize=None):
 
 
 @log_method()
-def get_eris_array(emb, mo_coeff, compact=False):
+def get_eris_array(emb: Embedding, mo_coeff: np.ndarray, compact: bool = False) -> np.ndarray:
     """Get electron-repulsion integrals in MO basis as a NumPy array.
 
     Parameters
@@ -159,7 +168,7 @@ def get_eris_array(emb, mo_coeff, compact=False):
 
 
 @log_method()
-def get_eris_object(emb, postscf, fock=None):
+def get_eris_object(emb: Embedding, postscf, fock: np.ndarray | None = None):
     """Get ERIs for post-SCF methods.
 
     For folded PBC calculations, this folds the MO back into k-space
