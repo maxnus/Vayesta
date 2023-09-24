@@ -2,28 +2,32 @@ API
 ===
 
 .. warning::
-   The API documentation is work-in-progress!
+    The API documentation is work-in-progress!
 
-Basic
------
+Basic Modules
+-------------
 
-.. toctree::
-   :maxdepth: 1
+.. autosummary::
+    :toctree: _autosummary
+    :template: custom-module-template.rst
+    :recursive:
 
-   vayesta.dmet
-   vayesta.edmet
-   vayesta.ewf
+    vayesta.dmet
+    vayesta.edmet
+    vayesta.ewf
 
-Advanced
---------
+Advanced Modules
+----------------
 
-.. toctree::
-   :maxdepth: 1
+.. autosummary::
+    :toctree: _autosummary
+    :template: custom-module-template.rst
+    :recursive:
 
-   vayesta.core
-   vayesta.lattmod
-   vayesta.libs
-   vayesta.misc
-   vayesta.mpi
-   vayesta.rpa
-   vayesta.solver
+    vayesta.core
+    vayesta.lattmod
+    vayesta.libs
+    vayesta.misc
+    vayesta.mpi
+    vayesta.rpa
+    vayesta.solver
